@@ -5,7 +5,7 @@ import awswrangler as wr
 
 
 def lambda_handler(event, context):
-    #if __name__ == '__main__':
+#if __name__ == '__main__':
     course_names = []
     course_layouts = []
     course_pars = []
@@ -25,8 +25,8 @@ def lambda_handler(event, context):
             if span.get('id'):
                 if 'layout-details' in span.get('id'):
                     course_name: str = span.a.string
-                    course_info: str = span.text.split(' - ')[1].split(';')
-                    course_layout = course_info[0].strip()
+                    course_info: str = span.text.split(course_name)[1].split(';')
+                    course_layout = course_info[0].strip(' - ').strip()
                     course_par = course_info[2].strip()
                     course_distance = course_info[3].strip()
         round_score = None
@@ -35,7 +35,8 @@ def lambda_handler(event, context):
         for td in players.find_all('td'):
             #find round score
             if 'round' in td.get('class'):
-                round_score = td.a.string
+                if td.a is not None:
+                    round_score = td.a.string
             # find round raiting
             elif 'round-rating' in td.get('class'):
                 round_rating = td.string
