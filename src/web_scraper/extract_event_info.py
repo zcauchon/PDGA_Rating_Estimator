@@ -19,7 +19,7 @@ def lambda_handler(event, context):
     tourny_date = soup.find('li', attrs={'class':"tournament-date"}).text.split(':')[1].strip()
     division = soup.find_all('details')
     for div in division:
-        layout_spans = div.find_all('span')
+        layout_spans = div.find_all('div') # changed from span to div
         for span in layout_spans:
             #find span that has the layout details
             if span.get('id'):
