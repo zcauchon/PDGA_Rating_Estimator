@@ -10,17 +10,29 @@ def lambda_handler(event, context):
 #if __name__ == '__main__':
     d = date.today() - timedelta(days=15)
     min_date = d.replace(day=1).strftime('%Y-%m-%d')
-    url = f'https://www.pdga.com/tour/search?date_filter[min][date]={min_date}&State[]=PA&Tier[]=A&Tier[]=B&Tier[]=C'
-    event_url_base = 'https://www.pdga.com'
+    url_base = 'https://www.pdga.com'
+    search_url = f'/tour/search?date_filter[min][date]={min_date}&State[]=PA&Tier[]=A&Tier[]=B&Tier[]=C'
     l = boto3.client('lambda')
-    page = get(url)
+    url = event.get("search_url", search_url)
+    page = get(f"{url_base}{url}")
     soup = BeautifulSoup(page.content, "html.parser")
 
     for event in soup.find_all('td', attrs={'class':'views-field-OfficialName'}):
-        event_url = f'{event_url_base}{event.a["href"]}'
+        event_url = f'{url_base}{event.a["href"]}'
         print('Processing', event_url)
         l.invoke(
             FunctionName='arn:aws:lambda:us-east-2:628608553663:function:scrape_pdga_round',
             InvocationType='Event',
             Payload='{"url":"' + event_url + '"}'
+        )
+
+    # check if there are paged results
+    next_page = soup.find("li", attrs={"class":"pager-next"})
+    if next_page is not None:
+        print('More results available...')
+        # invoke iteself using the next page url
+        l.invoke(
+            FunctionName='arn:aws:lambda:us-east-2:628608553663:function:scrape_pdga_events',
+            InvocationType='Event',
+            Payload='{"search_url":"' + next_page.a["href"] + '"}'
         )
