@@ -6,59 +6,109 @@ import awswrangler as wr
 
 def lambda_handler(event, context):
     #if __name__ == '__main__':
-    course_names = []
-    course_layouts = []
-    course_pars = []
-    course_distances = []
-    round_scores = []
-    round_ratings = []
-    page = get(event['url'])
+    page = get(event["url"])
+    event_id = event["url"].split("/")[-1]
     soup = BeautifulSoup(page.content, "html.parser")
-    #find each of the division results
-    tourny_name = soup.find('h1', attrs={'id':"page-title"}).text.replace('/','_')
-    tourny_date = soup.find('li', attrs={'class':"tournament-date"}).text.split(':')[1].strip()
-    division = soup.find_all('details')
-    for div in division:
-        layout_spans = div.find_all('div') # changed from span to div
-        for span in layout_spans:
-            #find span that has the layout details
-            if span.get('id'):
-                if 'layout-details' in span.get('id'):
-                    course_name: str = span.a.string
-                    course_info: str = span.text.split(' - ')[1].split(';')
-                    course_layout = course_info[0].strip()
-                    course_par = course_info[2].strip()
-                    course_distance = course_info[3].strip()
-        round_score = None
-        round_rating = None
-        players = span.find_next('tbody')
-        for td in players.find_all('td'):
-            #find round score
-            if 'round' in td.get('class'):
-                round_score = td.a.string
-            # find round raiting
-            elif 'round-rating' in td.get('class'):
-                round_rating = td.string
-            if all(v is not None for v in [round_score, round_rating]):
-                round_scores.append(round_score)
-                round_ratings.append(round_rating)
-                course_names.append(course_name)
-                course_layouts.append(course_layout)
-                course_pars.append(course_par)
-                course_distances.append(course_distance)
-                round_score = None
-                round_rating = None
-    df = pd.DataFrame(data={
-        'tourny':[tourny_name]*len(course_names),
-        'date':[tourny_date]*len(course_names),
-        'course':course_names, 
-        'layout':course_layouts,
-        'par':course_pars, 
-        'distance':course_distances, 
-        'score':round_scores, 
-        'rating':round_ratings}
-    )
-    df.drop_duplicates(inplace=True)
-    for course in df['course'].unique():
-        course_df = df[df['course'] == course]
-        wr.s3.to_csv(course_df, f's3://pdga-ratings/{course}/{tourny_name}_{tourny_date}.csv', index=False)
+
+    records = []
+
+    # first lets get tourny level info
+    event_name = soup.find('h1', attrs={'id':"page-title"}).text.replace('/','_')
+    event_info = soup.find_all("div", attrs={"class":"pane-tournament-event-info"})[0]
+    event_date = event_info.find('li', attrs={'class':"tournament-date"}).text.split(':')[1].strip()
+    event_location = event_info.find('li', attrs={'class':"tournament-location"}).text.split(":")[1].strip()
+    event_city, event_state, event_country = event_location.split(",")
+    event_director = event_info.find('li', attrs={'class': "tournament-director"}).text.split(":")[1].strip()
+    event_type = event_info.find("h4").text
+    event_view = soup.find_all("div", attrs={"class":"pane-tournament-event-view"})
+    if event_view is not None:
+        event_status = event_view[0].find("td", attrs={"class":"status"}).text
+        if event_status != "Event complete; official ratings processed":
+            # event not finalized, dont gather data
+            return "Event Not Finalized"
+        event_player_count = event_view[0].find("td", attrs={"class":"players"}).text
+        event_purse = event_view[0].find("td", attrs={"class":"purse"}).text
+    else:
+        event_player_count = ""
+        event_purse = ""
+    
+    #find each of the divisions in the event
+    divisions = soup.find_all('details')
+    for division in divisions:
+        # each division can play at a different location/layout
+        div_id = division.find("h3")["id"]
+        rounds = division.find_all("th", attrs={"class":"round"})
+        for round in rounds:
+            # each round can be played at a different location/layout
+            round_id = round.text.strip("Rd")
+            round_info = division.find("div", attrs={"id":f"layout-details-{event_id}-{div_id}-round-{round_id}"}).text
+            round_course = round_info.split(";")[0].split("-")[0].strip()
+            round_layout = round_info.split(";")[0].split("-")[1].strip()
+            round_holes = round_info.split(";")[1].split()[0].strip()
+            round_par = round_info.split(";")[2].split()[1].strip()
+            round_dist = round_info.split(";")[3].strip()
+            # get each players score for this round
+            players = division.find_all("tr")
+            for player in players:
+                if "th" in player.contents[0].name:
+                    continue
+                player_points = player.find("td", attrs={"class":"points"}).text
+                player_pdga = player.find("td", attrs={"class":"pdga-number"}).text
+                player_rating = player.find("td", attrs={"class":"player-rating"}).text
+                player_round_score = player.find_all("td", attrs={"class":"round"})[int(round_id)-1].text
+                player_round_rating = player.find_all("td", attrs={"class":"round-rating"})[int(round_id)-1].text
+                # add all the info to the record list
+                records.append([
+                    event_name,
+                    event_date,
+                    event_city,
+                    event_state,
+                    event_country,
+                    event_director,
+                    event_type,
+                    event_player_count,
+                    event_purse,
+                    div_id,
+                    round_id,
+                    round_course,
+                    round_layout,
+                    round_holes,
+                    round_par,
+                    round_dist,
+                    player_pdga,
+                    player_points,
+                    player_rating,
+                    player_round_score,
+                    player_round_rating
+                ])
+
+    df = pd.DataFrame(columns=[
+        "event_name",
+        "event_date",
+        "event_city",
+        "event_state",
+        "event_country",
+        "event_director",
+        "event_type",
+        "event_player_count",
+        "event_purse",
+        "event_division",
+        "round_number",
+        "round_course",
+        "round_layout",
+        "layout_holes",
+        "layout_par",
+        "layout_distance",
+        "player_pdga",
+        "player_earned_points",
+        "player_rating",
+        "player_round_score",
+        "player_round_rating"
+    ], data=records)
+
+    for course, course_df in df.groupby("round_course"):
+        wr.s3.to_csv(
+            course_df,
+            f"s3://pdga-ratings/{course}/{event_name}_{event_date}.csv",
+            index=False
+        )
