@@ -1,14 +1,16 @@
 from bs4 import BeautifulSoup
 import pandas as pd
-from requests import get
+import aiohttp
+import asyncio
 import snowflake.connector
 from snowflake.connector.pandas_tools import write_pandas
 
-def event_info_extractor(event_id):
+async def event_info_extractor(session: aiohttp.ClientSession, event_id):
     url = f"https://www.pdga.com/tour/event/{event_id}"
     try:
-        with get(url) as page:
-            soup = BeautifulSoup(page.content, "html.parser")
+        async with session.get(url) as resp:
+            html = await resp.text()
+            soup = BeautifulSoup(html, "html.parser")
 
             records = []
 
@@ -28,10 +30,7 @@ def event_info_extractor(event_id):
                     print('Event still pending', event_id)
                     return None
                 event_player_count = event_view[0].find("td", attrs={"class":"players"}).text
-                try:
-                    event_purse = event_view.find("td", attrs={"class":"purse"}).text
-                except AttributeError:
-                    event_purse = ""
+                event_purse = event_view[0].find("td", attrs={"class":"purse"}).text
             else:
                 event_player_count = ""
                 event_purse = ""
@@ -56,10 +55,7 @@ def event_info_extractor(event_id):
                     for player in players:
                         if "th" in player.contents[0].name:
                             continue
-                        try:
-                            player_points = player.find("td", attrs={"class":"points"}).text
-                        except AttributeError:
-                            player_points = ""
+                        player_points = player.find("td", attrs={"class":"points"}).text
                         player_pdga = player.find("td", attrs={"class":"pdga-number"}).text
                         player_rating = player.find("td", attrs={"class":"player-rating"}).text
                         player_round_score = player.find_all("td", attrs={"class":"round"})[int(round_id)-1].text
@@ -118,13 +114,16 @@ def event_info_extractor(event_id):
 
     return df
 
-def main():    
+async def main():    
     
     # process event
     # get pending events from db (eventually filter out dups and pick up pendings)
     # create task list
     # wait for all the complete
     # save df to stg
+    async with aiohttp.ClientSession() as session:
+        tasks = []
+        # i dislike how this is tightly coupled with sf, maybe make interface/subclasses
         with snowflake.connector.connect(
             connection_name="stg"
         ) as con:
@@ -140,14 +139,19 @@ def main():
                     from pdga_db.pdga.EVENT_REQUESTS e
                     where e.status in (3,4)"""
             pending_events = con.cursor().execute(_sql) # this feels so wrong, can i make this a dbt query?
-            results = pd.DataFrame()
             for event in pending_events:
-                event_info = event_info_extractor(event[0])
-                if event_info is not None:
-                    results = pd.concat([results, event_info])
-            if len(results) > 0:
-                print(f"Writing {len(results)} new events to EVENTS_INFO")
+                tasks.append(asyncio.create_task(event_info_extractor(session, event[0]), name=event[0]))
+            completed_events, pending = await asyncio.wait(tasks, return_when=asyncio.ALL_COMPLETED)
+            print(completed_events)
+            events_info = [event.result() for event in completed_events if event.result() is not None]
+            for task in pending:
+                print(f"{task.get_name()} still pending")
+                task.cancel()
+            print(events_info)
+            if len(events_info) > 0:
+                print(f"Writing {len(events_info)} new events to EVENTS_INFO")
+                results = pd.concat(events_info)
                 write_pandas(con, results, "EVENTS_INFO", auto_create_table=True, overwrite=True)
 
 if __name__ == '__main__':
-    main()
+    asyncio.run(main())

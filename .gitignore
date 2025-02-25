@@ -1,0 +1,4 @@
+/tmp*
+pdge_ratings
+*.pyc
+pdga/tmp*
