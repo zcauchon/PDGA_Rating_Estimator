@@ -1,6 +1,7 @@
 from bs4 import BeautifulSoup
 import pandas as pd
 from requests import get
+from ..constants import request_status
 
 def event_info_extractor(event_id):
     url = f"https://www.pdga.com/tour/event/{event_id}"
@@ -24,7 +25,7 @@ def event_info_extractor(event_id):
                 if "Event complete" not in event_status:
                     # event not finalized, dont gather data
                     print('Event still pending', event_id)
-                    return None
+                    return request_status.incomplete, None
                 event_player_count = event_view[0].find("td", attrs={"class":"players"}).text
                 try:
                     event_purse = event_view.find("td", attrs={"class":"purse"}).text
@@ -114,6 +115,6 @@ def event_info_extractor(event_id):
             ], data=records)
     except AttributeError as e:
         print("Error loading information for", event_id, e)
-        return None
+        return request_status.errored, None
 
-    return df
+    return request_status.complete, df

@@ -2,15 +2,15 @@ import pandas as pd
 from datetime import date, timedelta
 from requests import get
 from bs4 import BeautifulSoup
-import snowflake.connector
 from snowflake.connector.pandas_tools import write_pandas
 from .parser.extract_event_info import event_info_extractor
 
-from dagster import Output, asset
+from dagster import asset
+from dagster_snowflake import SnowflakeResource
 
 @asset
-def event_requests() -> None:
-    d = date.today() - timedelta(days=15)
+def event_requests(snowflake_pdga_stg: SnowflakeResource) -> None:
+    d = date.today() - timedelta(days=1)
     min_date = d.strftime('%Y-%m-%d')
     url_base = 'https://www.pdga.com'
     search_url = f'/tour/search?date_filter[min][date]={min_date}&State[]=PA&Tier[]=A&Tier[]=B&Tier[]=C'
@@ -38,37 +38,35 @@ def event_requests() -> None:
     # create df of new events and save to stg
     df = pd.DataFrame(columns=["EVENT_ID", "SCRAPE_DATE", "STATUS"], data=results)
     df.drop_duplicates(inplace=True)
-    with snowflake.connector.connect(
-        connection_name="stg"
-    ) as con:
+    with snowflake_pdga_stg.get_connection() as con:
         success, nchunks, nrows, _ = write_pandas(con, df, 'EVENT_REQUESTS', auto_create_table=True, overwrite=True)
         print(f'Loaded {nrows} rows for processing')
 
 @asset(
     deps=[event_requests]
 )
-def new_event_info() -> pd.DataFrame:
-    with snowflake.connector.connect(
-            connection_name="stg"
-        ) as con:
-            _sql = """select event_id 
-                    from pdga_db.pdga_stg.EVENT_REQUESTS s
-                    --where event_id = 87901
-                    union
-                    select event_id
-                    from pdga_db.pdga.EVENT_REQUESTS e
-                    where e.status = 2
-                    minus
-                    select event_id
-                    from pdga_db.pdga.EVENT_REQUESTS e
-                    where e.status in (3,4)"""
-            pending_events = con.cursor().execute(_sql) # this feels so wrong, can i make this a dbt query?
-            results = pd.DataFrame()
-            for event in pending_events:
-                event_info = event_info_extractor(event[0])
-                if event_info is not None:
-                    results = pd.concat([results, event_info])
-            if len(results) > 0:
-                print(f"Writing {len(results)} new events to EVENTS_INFO")
-                write_pandas(con, results, "EVENTS_INFO", auto_create_table=True, overwrite=True)
+def new_event_info(snowflake_pdga_stg: SnowflakeResource) -> pd.DataFrame:
+    with snowflake_pdga_stg.get_connection() as con:
+        _sql = """select event_id 
+                from EVENT_REQUESTS s
+                where status = 1
+                union
+                select event_id
+                from pdga.EVENT_REQUESTS e
+                where e.status = 2
+                minus
+                select event_id
+                from pdga.EVENT_REQUESTS e
+                where e.status in (3,4)"""
+        pending_events = con.cursor().execute(_sql) # this feels so wrong, can i make this a dbt query?
+        results = pd.DataFrame()
+        for event in pending_events:
+            status, event_info = event_info_extractor(event[0])
+            # would probably be better to do this all at once
+            con.cursor().execute(f"update EVENT_REQUESTS set status = {status} where event_id = {event[0]}")
+            if event_info is not None:
+                results = pd.concat([results, event_info])
+        if len(results) > 0:
+            print(f"Writing {len(results)} new events to EVENTS_INFO")
+            write_pandas(con, results, "EVENTS_INFO", auto_create_table=True, overwrite=True)
     return results
