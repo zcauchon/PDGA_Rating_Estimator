@@ -8,7 +8,9 @@ from .parser.extract_event_info import event_info_extractor
 from dagster import asset
 from dagster_snowflake import SnowflakeResource
 
-@asset
+@asset(
+    group_name="web"
+)
 def event_requests(snowflake_pdga_stg: SnowflakeResource) -> None:
     d = date.today() - timedelta(days=1)
     min_date = d.strftime('%Y-%m-%d')
@@ -43,11 +45,12 @@ def event_requests(snowflake_pdga_stg: SnowflakeResource) -> None:
         print(f'Loaded {nrows} rows for processing')
 
 @asset(
-    deps=[event_requests]
+    deps=[event_requests],
+    group_name="web"
 )
 def new_event_info(snowflake_pdga_stg: SnowflakeResource) -> pd.DataFrame:
     with snowflake_pdga_stg.get_connection() as con:
-        _sql = """select event_id 
+        _sql = """select distinct event_id 
                 from EVENT_REQUESTS s
                 where status = 1
                 union

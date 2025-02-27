@@ -1,0 +1,1 @@
+select * from pdga_stg.event_requests where status = 3

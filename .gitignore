@@ -3,3 +3,8 @@ pdge_ratings
 *.pyc
 .env
 pdga/tmp*
+*.egg-info
+*.tmp*
+dbt_packages
+/pdga/analytics/logs
+/pdga/analytics/target
