@@ -5,13 +5,20 @@ from bs4 import BeautifulSoup
 from snowflake.connector.pandas_tools import write_pandas
 from .parser.extract_event_info import event_info_extractor
 
-from dagster import asset
+from .project import dbt_project
+
+from dagster import asset, AssetExecutionContext
+from dagster_dbt import dbt_assets, DbtCliResource
 from dagster_snowflake import SnowflakeResource
 
 @asset(
-    group_name="web"
+    group_name="web",
+    compute_kind="python"
 )
-def event_requests(snowflake_pdga_stg: SnowflakeResource) -> None:
+def event_requests_stg(snowflake_pdga_stg: SnowflakeResource) -> None:
+    """
+        Find recently update events using pdga tour search
+    """
     d = date.today() - timedelta(days=1)
     min_date = d.strftime('%Y-%m-%d')
     url_base = 'https://www.pdga.com'
@@ -45,10 +52,14 @@ def event_requests(snowflake_pdga_stg: SnowflakeResource) -> None:
         print(f'Loaded {nrows} rows for processing')
 
 @asset(
-    deps=[event_requests],
-    group_name="web"
+    deps=[event_requests_stg],
+    group_name="web",
+    compute_kind="python"
 )
-def new_event_info(snowflake_pdga_stg: SnowflakeResource) -> pd.DataFrame:
+def event_details_stg(snowflake_pdga_stg: SnowflakeResource) -> pd.DataFrame:
+    """
+        Get event details for identified events
+    """
     with snowflake_pdga_stg.get_connection() as con:
         _sql = """select distinct event_id 
                 from EVENT_REQUESTS s
@@ -70,6 +81,15 @@ def new_event_info(snowflake_pdga_stg: SnowflakeResource) -> pd.DataFrame:
             if event_info is not None:
                 results = pd.concat([results, event_info])
         if len(results) > 0:
-            print(f"Writing {len(results)} new events to EVENTS_INFO")
-            write_pandas(con, results, "EVENTS_INFO", auto_create_table=True, overwrite=True)
+            print(f"Writing {len(results)} new events to EVENT_DETAILS")
+            write_pandas(con, results, "EVENT_DETAILS", auto_create_table=True, overwrite=True)
     return results
+
+
+### DBT ###
+@dbt_assets(
+    manifest=dbt_project.manifest_path
+)
+def dbt_analytics(context: AssetExecutionContext, dbt: DbtCliResource):
+    dbt_build_invocation = dbt.cli(["build"], context=context)
+    yield from dbt_build_invocation.stream()

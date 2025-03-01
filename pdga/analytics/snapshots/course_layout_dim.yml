@@ -1,0 +1,9 @@
+snapshots:
+  - name: course_layout_dim
+    relation: ref('course_layout_scd')
+    description: course/layout info for a given time period
+    config:
+      strategy: check
+      unique_key: course_layout_id
+      check_cols: [course_layout_id]
+      hard_deletes: ignore

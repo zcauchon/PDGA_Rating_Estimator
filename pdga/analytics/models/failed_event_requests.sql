@@ -1,1 +1,1 @@
-select * from pdga_stg.event_requests where status = 3
+select * from {{ ref('event_requests') }} where status = 3

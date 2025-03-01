@@ -90,31 +90,33 @@ def event_info_extractor(event_id):
                         ])
 
             df = pd.DataFrame(columns=[
-                "event_id",
-                "event_name",
-                "event_date",
-                "event_city",
-                "event_state",
-                "event_country",
-                "event_director",
-                "event_type",
-                "event_player_count",
-                "event_purse",
-                "event_division",
-                "round_number",
-                "round_course",
-                "round_layout",
-                "layout_holes",
-                "layout_par",
-                "layout_distance",
-                "player_pdga",
-                "player_earned_points",
-                "player_rating",
-                "player_round_score",
-                "player_round_rating"
+                "EVENT_ID",
+                "EVENT_NAME",
+                "EVENT_DATE",
+                "EVENT_CITY",
+                "EVENT_STATE",
+                "EVENT_COUNTRY",
+                "EVENT_DIRECTOR",
+                "EVENT_TYPE",
+                "EVENT_PLAYER_COUNT",
+                "EVENT_PURSE",
+                "EVENT_DIVISION",
+                "ROUND_NUMBER",
+                "ROUND_COURSE",
+                "ROUND_LAYOUT",
+                "LAYOUT_HOLES",
+                "LAYOUT_PAR",
+                "LAYOUT_DISTANCE",
+                "PLAYER_PDGA",
+                "PLAYER_EARNED_POINTS",
+                "PLAYER_RATING",
+                "PLAYER_ROUND_SCORE",
+                "PLAYER_ROUND_RATING"
             ], data=records)
-    except AttributeError as e:
+    except (AttributeError, IndexError) as e:
         print("Error loading information for", event_id, e)
         return request_status.errored, None
-
+    except Exception as e:
+        print('UKNOWN ERROR!!', e)
+        return request_status.errored, None
     return request_status.complete, df
