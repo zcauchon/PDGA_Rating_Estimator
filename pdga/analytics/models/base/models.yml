@@ -1,0 +1,15 @@
+version: 2
+
+sources:
+  - name: pdga
+    tables:
+      - name: event_requests
+        description: Event IDs that need to be retrieved
+        columns:
+          - name: event_id
+            description: come on...
+          - name: scrape_date
+          - name: status
+      - name: event_dim
+      - name: player_dim_snapshot
+      - name: course_layout_dim

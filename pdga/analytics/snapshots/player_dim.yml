@@ -1,0 +1,9 @@
+snapshots:
+  - name: player_dim
+    relation: ref('player_scd')
+    description:  player/rating for a givien time period
+    config:
+      strategy: check
+      unique_key: [player_pdga, player_rating]
+      check_cols: [player_pdga, player_rating]
+      hard_deletes: ignore
