@@ -17,7 +17,7 @@ def event_info_extractor(event_id):
             event_date = event_info.find('li', attrs={'class':"tournament-date"}).text.split(':')[1].strip()
             event_location = event_info.find('li', attrs={'class':"tournament-location"}).text.split(":")[1].strip()
             event_city, event_state, event_country = event_location.split(",")
-            event_director = event_info.find('li', attrs={'class': "tournament-director"}).text.split(":")[1].strip()
+            event_director = event_info.find('li', attrs={'class': lambda L: L and L.endswith("-director")}).text.split(":")[1].strip()
             event_type = event_info.find("h4").text
             event_view = soup.find_all("div", attrs={"class":"pane-tournament-event-view"})
             if event_view is not None:
@@ -60,7 +60,10 @@ def event_info_extractor(event_id):
                         except AttributeError:
                             player_points = ""
                         player_pdga = player.find("td", attrs={"class":"pdga-number"}).text
-                        player_rating = player.find("td", attrs={"class":"player-rating"}).text
+                        try:
+                            player_rating = player.find("td", attrs={"class":"player-rating"}).text
+                        except AttributeError:
+                            player_rating = ""
                         player_round_score = player.find_all("td", attrs={"class":"round"})[int(round_id)-1].text
                         player_round_rating = player.find_all("td", attrs={"class":"round-rating"})[int(round_id)-1].text
                         # add all the info to the record list

@@ -27,7 +27,8 @@ clean-targets:         # directories to be removed by `dbt clean`
 # Full documentation: https://docs.getdbt.com/docs/configuring-models
 
 models:
+  +transient: false
   analytics:
     # Config indicated by + and applies to all files under models/example/
-    +materialized: table
+    +materialized: incremental
     +incremental_strategy: merge

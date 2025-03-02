@@ -9,7 +9,7 @@ from snowflake.connector.pandas_tools import write_pandas
 #https://www.pdga.com/tour/search?date_filter[min][date]=2022-01-29&date_filter[max][date]=2023-01-29&State[]=PA&Tier[]=A&Tier[]=B&Tier[]=C
 
 if __name__ == '__main__':
-    d = date.today() - timedelta(days=15)
+    d = date.today() - timedelta(days=1)
     min_date = d.strftime('%Y-%m-%d')
     url_base = 'https://www.pdga.com'
     search_url = f'/tour/search?date_filter[min][date]={min_date}&State[]=PA&Tier[]=A&Tier[]=B&Tier[]=C'

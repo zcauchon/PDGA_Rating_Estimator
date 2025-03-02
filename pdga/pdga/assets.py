@@ -63,15 +63,7 @@ def event_details_stg(snowflake_pdga_stg: SnowflakeResource) -> pd.DataFrame:
     with snowflake_pdga_stg.get_connection() as con:
         _sql = """select distinct event_id 
                 from EVENT_REQUESTS s
-                where status = 1
-                union
-                select event_id
-                from pdga.EVENT_REQUESTS e
-                where e.status = 2
-                minus
-                select event_id
-                from pdga.EVENT_REQUESTS e
-                where e.status in (3,4)"""
+                where status = 1"""
         pending_events = con.cursor().execute(_sql) # this feels so wrong, can i make this a dbt query?
         results = pd.DataFrame()
         for event in pending_events:
@@ -80,9 +72,10 @@ def event_details_stg(snowflake_pdga_stg: SnowflakeResource) -> pd.DataFrame:
             con.cursor().execute(f"update EVENT_REQUESTS set status = {status} where event_id = {event[0]}")
             if event_info is not None:
                 results = pd.concat([results, event_info])
+        con.cursor().execute("truncate pdga_stg.event_details")
         if len(results) > 0:
             print(f"Writing {len(results)} new events to EVENT_DETAILS")
-            write_pandas(con, results, "EVENT_DETAILS", auto_create_table=True, overwrite=True)
+            write_pandas(con, results, "EVENT_DETAILS", auto_create_table=True)
     return results
 
 

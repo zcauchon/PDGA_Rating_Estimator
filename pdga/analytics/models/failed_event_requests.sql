@@ -1,1 +1,0 @@
-select * from {{ ref('event_requests') }} where status = 3
