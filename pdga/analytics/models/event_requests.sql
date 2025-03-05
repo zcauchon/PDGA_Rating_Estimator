@@ -12,3 +12,4 @@ with details as (
     select 1 from {{ source('pdga_stg', 'event_details') }} where 1 = 2
 )
 select * from {{ source('pdga_stg', 'event_requests') }}
+where status != 1

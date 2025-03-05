@@ -1,5 +1,4 @@
---probably make this event_request_status_by_day
---use daily partition keya and delete/insert using key
+
 {{
   config(
     materialized = 'incremental',
@@ -13,6 +12,9 @@ select
     status,
     count(event_id) as status_count
 from {{ ref('event_requests') }} 
+{% if is_incremental() %}
+  where scrape_date > (select max(scrape_date) from {{ this }})
+{% endif %}
 group by 
     scrape_date,
     status
