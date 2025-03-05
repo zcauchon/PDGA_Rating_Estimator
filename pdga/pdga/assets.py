@@ -19,10 +19,12 @@ def event_requests_stg(snowflake_pdga_stg: SnowflakeResource) -> None:
     """
         Find recently update events using pdga tour search
     """
+    
     d = date.today() - timedelta(days=1)
     min_date = d.strftime('%Y-%m-%d')
+    today = date.today().strftime('%Y-%m-%d')
     url_base = 'https://www.pdga.com'
-    search_url = f'/tour/search?date_filter[min][date]={min_date}&State[]=PA&Tier[]=A&Tier[]=B&Tier[]=C'
+    search_url = f'/tour/search?date_filter[min][date]={min_date}&date_filter[max][date]={today}&Country[]=United+States&Tier[]=A&Tier[]=A%2FB&Tier[]=A%2FC&Tier[]=B&Tier[]=B%2FA&Tier[]=B%2FC&Tier[]=C&Tier[]=C%2FA&Tier[]=C%2FB'
     results = []
 
     while True:
@@ -63,7 +65,12 @@ def event_details_stg(snowflake_pdga_stg: SnowflakeResource) -> pd.DataFrame:
     with snowflake_pdga_stg.get_connection() as con:
         _sql = """select distinct event_id 
                 from EVENT_REQUESTS s
-                where status = 1"""
+                where status = 1
+                union
+                select event_id
+                from pdga.EVENT_REQUESTS
+                where status = 2
+                and scrape_date < CURRENT_DATE()-5"""
         pending_events = con.cursor().execute(_sql) # this feels so wrong, can i make this a dbt query?
         results = pd.DataFrame()
         for event in pending_events:
