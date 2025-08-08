@@ -8,10 +8,10 @@ from bs4 import BeautifulSoup
 from sqlalchemy import create_engine, text, URL
 from sqlalchemy.types import Integer
 
-from .project import dbt_project
-from .constants import request_status
-from .orchestration.partitions import daily_partitions
-from .parser.extract_event_info import event_info_extractor
+from project import dbt_project
+from constants import request_status
+from orchestration.partitions import daily_partitions
+from parser.extract_event_info import event_info_extractor
 
 from dagster import asset, AssetExecutionContext
 from dagster_dbt import dbt_assets, DbtCliResource
@@ -25,7 +25,6 @@ def event_requests(context: AssetExecutionContext) -> None:
     """
         Find recently update events using pdga tour search
     """
-    #TODO: move db info into a resource
     load_dotenv()
     url_obj = URL.create(
         "postgresql+psycopg2",
@@ -35,6 +34,7 @@ def event_requests(context: AssetExecutionContext) -> None:
         port=os.getenv("POSTGRES_PORT"),
         database="pdga"
     )
+    context.log.info(f"Connecting to {url_obj}")
     engine = create_engine(url_obj)
     
     proxy = {
@@ -87,10 +87,7 @@ def event_details(context: AssetExecutionContext) -> pd.DataFrame:
     """
         Get event details for identified events
     """
-    print(os.environ)
     load_dotenv()
-    print('Loaded dotenv')
-    print(os.environ)
     url_obj = URL.create(
         "postgresql+psycopg2",
         username=os.getenv("POSTGRES_USER"),

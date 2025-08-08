@@ -23,12 +23,15 @@ dagster-graphql==1.10.2
 dagster-pipes==1.10.2
 dagster-snowflake==0.26.2
 dagster-webserver==1.10.2
+dagster-postgres
+dagster-docker
 dbt-adapters==1.14.0
 dbt-common==1.15.0
 dbt-core==1.9.2
 dbt-extractor==0.5.1
 dbt-semantic-interfaces==0.7.4
 dbt-snowflake==1.9.1
+dbt-postgres
 deepdiff==7.0.1
 docstring_parser==0.16
 filelock==3.17.0
@@ -87,8 +90,6 @@ python-dotenv==1.0.1
 python-slugify==8.0.4
 pytimeparse==1.1.8
 pytz==2025.1
-pywin32==308
-pywin32-ctypes==0.2.3
 PyYAML==6.0.2
 referencing==0.36.2
 requests==2.32.3

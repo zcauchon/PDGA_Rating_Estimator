@@ -2,7 +2,7 @@ import os
 from bs4 import BeautifulSoup
 import pandas as pd
 from requests import get
-from ..constants import request_status
+from constants import request_status
 
 def event_info_extractor(event_id, target_date):
     url = f"https://www.pdga.com/tour/event/{event_id}"

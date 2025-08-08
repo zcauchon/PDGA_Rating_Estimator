@@ -1,0 +1,23 @@
+pdga_analytics:
+  target: dev
+  outputs:
+    dev:
+      type: postgres
+      host: 0.0.0.0
+      user: "{{ env_var('POSTGRES_USER') }}"
+      password: "{{ env_var('POSTGRES_PASS') }}"
+      port: 5432
+      dbname: 'pdga'
+      schema: 'pdga'
+      threads: 1
+      query_tag: dbt
+    test:
+      type: postgres
+      host: "{{ env_var('POSTGRES_URL') }}"
+      user: "{{ env_var('POSTGRES_USER') }}"
+      password: "{{ env_var('POSTGRES_PASS') }}"
+      port: 5432
+      dbname: 'pdga'
+      schema: 'pdga'
+      threads: 1
+      query_tag: dbt

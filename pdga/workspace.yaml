@@ -1,0 +1,5 @@
+load_from:
+  - grpc_server:
+      host: docker_pdga
+      port: 4000
+      location_name: pdga

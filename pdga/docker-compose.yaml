@@ -1,0 +1,113 @@
+
+services:
+  # This service runs the postgres DB used by dagster for run storage, schedule storage,
+  # and event log storage. Depending on the hardware you run this Compose on, you may be able
+  # to reduce the interval and timeout in the healthcheck to speed up your `docker-compose up` times.
+  docker_postgresql:
+    image: postgres:11
+    container_name: docker_postgresql
+    env_file:
+      - ./dagster.env
+    networks:
+      - docker_network
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U postgres_user -d postgres_db']
+      interval: 10s
+      timeout: 8s
+      retries: 5
+
+  # service to host postgres db that is acting as the DW for the pdge service
+  pdga_dwh:
+    image: postgres:latest
+    container_name: pdga_dwh
+    environment:
+      POSTGRES_DB: pdga
+      POSTGRES_USER: edwetl
+      POSTGRES_PASSWORD: edwetl
+    ports:
+      - "5432:5432"
+    networks:
+      - docker_network
+
+  # This service runs the gRPC server that loads your user code, in both dagster-webserver
+  # and dagster-daemon. By setting DAGSTER_CURRENT_IMAGE to its own image, we tell the
+  # run launcher to use this same image when launching runs in a new container as well.
+  # Multiple containers like this can be deployed separately - each just needs to run on
+  # its own port, and have its own entry in the workspace.yaml file that's loaded by the
+  # webserver.
+  docker_pdga:
+    build:
+      context: .
+      dockerfile: ./pdga/dockerfile_pdga
+    container_name: docker_pdga
+    image: docker_pdga_image
+    restart: always
+    environment:
+      DAGSTER_CURRENT_IMAGE: 'docker_pdga_image'
+    env_file:
+      - ./pdga/.env
+      - ./dagster.env
+    networks:
+      - docker_network
+
+  # This service runs dagster-webserver, which loads your user code from the user code container.
+  # Since our instance uses the QueuedRunCoordinator, any runs submitted from the webserver will be put on
+  # a queue and later dequeued and launched by dagster-daemon.
+  docker_webserver:
+    build:
+      context: .
+      dockerfile: ./dockerfile_dagster
+    entrypoint:
+      - dagster-webserver
+      - -h
+      - '0.0.0.0'
+      - -p
+      - '3000'
+      - -w
+      - workspace.yaml
+    container_name: docker_webserver
+    expose:
+      - '3000'
+    ports:
+      - '3000:3000'
+    env_file:
+      - ./dagster.env
+    volumes: # Make docker client accessible so we can terminate containers from the webserver
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /tmp/io_manager_storage:/tmp/io_manager_storage
+    networks:
+      - docker_network
+    depends_on:
+      docker_postgresql:
+        condition: service_healthy
+      docker_pdga:
+        condition: service_started
+
+  # This service runs the dagster-daemon process, which is responsible for taking runs
+  # off of the queue and launching them, as well as creating runs from schedules or sensors.
+  docker_daemon:
+    build:
+      context: .
+      dockerfile: ./dockerfile_dagster
+    entrypoint:
+      - dagster-daemon
+      - run
+    container_name: docker_daemon
+    restart: on-failure
+    env_file:
+      - ./dagster.env
+    volumes: # Make docker client accessible so we can launch containers using host docker
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /tmp/io_manager_storage:/tmp/io_manager_storage
+    networks:
+      - docker_network
+    depends_on:
+      docker_postgresql:
+        condition: service_healthy
+      docker_pdga:
+        condition: service_started
+
+networks:
+  docker_network:
+    driver: bridge
+    name: docker_network
